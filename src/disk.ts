@@ -381,9 +381,14 @@ export function readFileSync(filesystem: Filesystem, filename: string, info: Fil
     return Buffer.alloc(0);
   }
   if (info.unpacked) {
-    // it's an unpacked file, copy it.
+    // It's an unpacked file — read from the external .unpacked directory.
+    // Return an empty buffer if the file is missing instead of throwing.
     const unpackedDir = `${filesystem.getRootPath()}.unpacked`;
-    return fs.readFileSync(ensureWithin(unpackedDir, filename));
+    const unpackedPath = ensureWithin(unpackedDir, filename);
+    if (!fs.existsSync(unpackedPath)) {
+      return Buffer.alloc(0);
+    }
+    return fs.readFileSync(unpackedPath);
   }
   // Node throws an exception when reading 0 bytes into a 0-size buffer,
   // so we short-circuit the read in this case.
@@ -422,8 +427,13 @@ export function readFileWithFd(
     return buffer;
   }
   if (info.unpacked) {
+    // Read from the external .unpacked directory; leave the pre-allocated
+    // zero-filled buffer as-is if the file is missing.
     const unpackedDir = `${filesystem.getRootPath()}.unpacked`;
-    buffer = fs.readFileSync(ensureWithin(unpackedDir, filename));
+    const unpackedPath = ensureWithin(unpackedDir, filename);
+    if (fs.existsSync(unpackedPath)) {
+      buffer = fs.readFileSync(unpackedPath);
+    }
   } else {
     const offset = 8 + filesystem.getHeaderSize() + parseInt(info.offset);
     fs.readSync(fd, buffer, 0, info.size, offset);

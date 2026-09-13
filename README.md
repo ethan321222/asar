@@ -1,233 +1,141 @@
-# @electron/asar - Electron Archive
+# asar
 
-[![Test](https://github.com/electron/asar/actions/workflows/test.yml/badge.svg)](https://github.com/electron/asar/actions/workflows/test.yml)
-[![npm version](http://img.shields.io/npm/v/@electron/asar.svg)](https://npmjs.org/package/@electron/asar)
-[![API docs](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fregistry.npmjs.org%2F%40electron%2Fasar%2Flatest&query=%24.version&logo=typescript&logoColor=white&label=API%20Docs)](https://packages.electronjs.org/asar)
+基于 [@electron/asar](https://github.com/electron/asar) 的 fork，修复了官方 `asar extract` 命令在处理平台相关文件时的 bug。
 
-ASAR is a simple extensive archive format. It concatenates all files together without compression
-(like [`tar`](https://www.gnu.org/software/tar/)) while having random access support.
+## 原始问题
 
-## Features
+使用官方 `asar extract` 命令解包时会报错：
 
-* Support random access
-* Use JSON to store file information
-* Very easy to write a parser
-* Store the contents of duplicated files only once
+```
+asar extract ./app.asar ./app
 
-## CLI
+Error: ENOENT: no such file or directory, open 'D:\app\resources\app.asar.unpacked\node_modules\@napi-rs\canvas-darwin-arm64\package.json'
+    at Object.openSync (node:fs:560:18)
+    at Object.readFileSync (node:fs:444:35)
+    at module.exports.readFileSync (...\asar\lib\disk.js:110:17)
+    at module.exports.extractAll (...\asar\lib\asar.js:204:28)
+```
 
-### Install
+之前已经对应issue
 
-This module requires Node 22.12.0 or later.
+https://github.com/electron/asar/issues/37
+
+#37:fails with an error "No such file or directory"
+
+
+## 问题分析
+
+基于上述issue的讨论记录
+
+`asar extract` 在处理 `unpacked` 文件时存在设计缺陷。
+
+Electron 应用可以将部分文件标记为 `unpacked`，这些文件不打包在 `.asar` 内部，而是存放在同级的 `app.asar.unpacked` 目录中。通常以下文件会被标记为 unpacked：
+
+- 原生 Node.js 模块（`.node` 文件）
+- 包含平台相关二进制的包（如 `@napi-rs/canvas-darwin-arm64`）
+- 需要在文件系统上直接可访问的资源
+
+**问题出在哪里：**
+
+1. asar 头文件中记录了所有文件的元信息，包括标记为 `unpacked` 的文件路径
+2. 官方 `asar extract` 遇到 `unpacked` 标记时，会直接用 `fs.readFileSync` 去读取 `app.asar.unpacked` 中的对应文件
+3. 但在**跨平台场景**下（例如在 Windows 上解包一个包含 macOS 原生模块的 app），`app.asar.unpacked` 中可能并不存在所有平台的原生模块
+4. 官方工具**没有做文件存在性检查**，直接读取导致 `ENOENT` 崩溃
+
+**具体到本例：** `@napi-rs/canvas-darwin-arm64` 是 macOS ARM64 的原生模块，在 Windows 上的 `app.asar.unpacked` 中自然不存在这个文件，官方工具在尝试读取其 `package.json` 时就崩溃了。
+
+## 解决方案
+
+本工具在提取 unpacked 文件时会**检查文件是否存在**：
+- 存在 → 正常复制
+- 不存在 → 创建空文件占位，继续处理后续文件
+
+这样即使缺少特定平台的原生模块，解包过程也能正常完成。
+
+## 使用方法
+
+### 环境要求
+
+- Node.js >= 22.12.0
+
+### 安装
 
 ```bash
-npm install --engine-strict @electron/asar
+# 克隆仓库
+git clone https://github.com/ethan321222/asar.git
+cd asar
+
+# 切换到修复分支
+git checkout asarx
+
+# 安装依赖并编译
+yarn install
+yarn build
 ```
 
-### Usage
+**方式 1：全局安装（推荐）**
 
 ```bash
-$ asar --help
-
-  Usage: asar [options] [command]
-
-  Commands:
-
-    pack|p <dir> <output>
-       create asar archive
-
-    list|l <archive>
-       list files of asar archive
-
-    extract-file|ef <archive> <filename>
-       extract one file from archive
-
-    extract|e <archive> <dest>
-       extract archive
-
-
-  Options:
-
-    -h, --help     output usage information
-    -V, --version  output the version number
-
+npm install -g .
 ```
 
-#### Excluding multiple resources from being packed
-
-Given:
-
-```text
-    app
-(a) ├── x1
-(b) ├── x2
-(c) ├── y3
-(d) │   ├── x1
-(e) │   └── z1
-(f) │       └── x2
-(g) └── z4
-(h)     └── w1
-```
-
-Exclude: a, b
+**方式 2：本地链接（开发调试）**
 
 ```bash
-asar pack app app.asar --unpack-dir "{x1,x2}"
+npm link
 ```
 
-Exclude: a, b, d, f
+> `npm link` 创建符号链接，修改代码后重新 `yarn build` 即可生效，无需重新安装。
+
+**方式 3：直接运行（无需安装）**
 
 ```bash
-asar pack app app.asar --unpack-dir "**/{x1,x2}"
+node bin/asar.mjs extract ./app.asar ./output
 ```
 
-Exclude: a, b, d, f, h
+**安装方式对比：**
+
+| 方式 | 本质 | 改代码后 | 删除项目后 | 适用场景 |
+|------|------|----------|------------|----------|
+| `npm link` | 符号链接 | 立即生效 | 命令失效 | 开发调试 |
+| `npm install -g .` | 复制文件 | 需重新安装 | 命令仍可用 | 正式使用 |
+| `node bin/asar.mjs` | 直接运行 | 立即生效 | 命令失效 | 临时测试 |
+
+### 使用命令
 
 ```bash
-asar pack app app.asar --unpack-dir "{**/x1,**/x2,z4/w1}"
+# 解包 asar 文件
+asarx extract ./app.asar ./output
+
+# 解包到默认目录
+asarx extract ./app.asar
+
+# 查看帮助
+asarx --help
 ```
 
-## Programmatic usage
+### 其他命令
 
-For full API usage, see the [API documentation](https://packages.electronjs.org/asar).
+```bash
+# 打包
+asarx pack <dir> <output>
 
-### Example
+# 列出文件
+asarx list <archive>
 
-```javascript
-import { createPackage } from '@electron/asar';
-
-const src = 'some/path/';
-const dest = 'name.asar';
-
-await createPackage(src, dest);
-console.log('done.');
+# 提取单个文件
+asarx extract-file <archive> <filename>
 ```
 
-Please note that there is currently **no** error handling provided!
+### 卸载
 
-### Deduplication
-
-Files with identical contents are stored once and shared: the first copy is
-written into the archive and every other copy's header entry points at that same
-`offset`. Nothing changes for readers — each file still has its own entry, size,
-integrity hash, and executable bit — but archives with duplicated contents (a
-common shape for bundled `node_modules`) get smaller and pack faster, since the
-redundant bytes are never written.
-
-Unpacked files (`unpack` / `unpackDir`) are always written out in full, because
-they live on disk outside the archive.
-
-### Transform
-
-You can pass in a `transform` option, that is a function, which either returns
-nothing, or a `stream.Transform`. The latter will be used on files that will be
-in the `.asar` file to transform them (e.g. compress).
-
-```javascript
-import { createPackageWithOptions } from '@electron/asar';
-
-const src = 'some/path/';
-const dest = 'name.asar';
-
-function transform (filename) {
-  return new CustomTransformStream()
-}
-
-await createPackageWithOptions(src, dest, { transform: transform });
-console.log('done.');
+```bash
+npm uninstall -g .
 ```
 
-## Format
+## 与官方工具的区别
 
-Asar uses [Pickle][pickle] to safely serialize binary value to file.
-
-The format of asar is very flat:
-
-```markdown
-| UInt32: header_size | String: header | Bytes: file1 | ... | Bytes: file42 |
-```
-
-The `header_size` and `header` are serialized with [Pickle][pickle] class, and
-`header_size`'s [Pickle][pickle] object is 8 bytes.
-
-The `header` is a JSON string, and the `header_size` is the size of `header`'s
-`Pickle` object.
-
-Structure of `header` is something like this:
-
-```json
-{
-   "files": {
-      "tmp": {
-         "files": {}
-      },
-      "usr" : {
-         "files": {
-           "bin": {
-             "files": {
-               "ls": {
-                 "offset": "0",
-                 "size": 100,
-                 "executable": true,
-                 "integrity": {
-                   "algorithm": "SHA256",
-                   "hash": "...",
-                   "blockSize": 1024,
-                   "blocks": ["...", "..."]
-                 }
-               },
-               "cd": {
-                 "offset": "100",
-                 "size": 100,
-                 "executable": true,
-                 "integrity": {
-                   "algorithm": "SHA256",
-                   "hash": "...",
-                   "blockSize": 1024,
-                   "blocks": ["...", "..."]
-                 }
-               }
-             }
-           }
-         }
-      },
-      "etc": {
-         "files": {
-           "hosts": {
-             "offset": "200",
-             "size": 32,
-             "integrity": {
-                "algorithm": "SHA256",
-                "hash": "...",
-                "blockSize": 1024,
-                "blocks": ["...", "..."]
-              }
-           }
-         }
-      }
-   }
-}
-```
-
-`offset` and `size` records the information to read the file from archive, the
-`offset` starts from 0 so you have to manually add the size of `header_size` and
-`header` to the `offset` to get the real offset of the file.
-
-Files with identical contents share a single copy in the archive, so more than
-one entry can point at the same `offset`.
-
-`offset` is a UINT64 number represented in string, because there is no way to
-precisely represent UINT64 in JavaScript `Number`. `size` is a JavaScript
-`Number` that is no larger than `Number.MAX_SAFE_INTEGER`, which has a value of
-`9007199254740991` and is about 8PB in size. We didn't store `size` in UINT64
-because file size in Node.js is represented as `Number` and it is not safe to
-convert `Number` to UINT64.
-
-`integrity` is an object consisting of a few keys:
-
-* A hashing `algorithm`, currently only `SHA256` is supported.
-* A hex encoded `hash` value representing the hash of the entire file.
-* An array of hex encoded hashes for the `blocks` of the file (i.e. for a blockSize of 4KB, this array contains the hash of every block if you split the file into N 4KB blocks).
-* A integer value `blockSize` representing the size in bytes of each block in the `blocks` hashes above.
-
-[pickle]: https://chromium.googlesource.com/chromium/src/+/main/base/pickle.h
+| 特性 | `asar extract` | `asarx extract` |
+|------|---------------|-----------------|
+| 处理缺失的外部文件 | ❌ 报错退出 | ✅ 创建空文件继续 |
+| 处理平台相关模块 | ❌ 需要所有文件存在 | ✅ 自动跳过缺失文件 |

@@ -421,7 +421,14 @@ export function extractAll(archivePath: string, dest: string) {
       try {
         let content: Buffer;
         if (file.unpacked) {
-          content = fs.readFileSync(path.join(`${filesystem.getRootPath()}.unpacked`, filename));
+          // Read from the external .unpacked directory; fall back to empty
+          // buffer if the file is missing (e.g. incomplete extraction).
+          const unpackedPath = path.join(`${filesystem.getRootPath()}.unpacked`, filename);
+          if (fs.existsSync(unpackedPath)) {
+            content = fs.readFileSync(unpackedPath);
+          } else {
+            content = Buffer.alloc(0);
+          }
         } else if (file.size <= 0) {
           content = Buffer.alloc(0);
         } else {
