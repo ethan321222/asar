@@ -95,7 +95,7 @@ node bin/asar.mjs extract ./app.asar ./output
 从 [GitHub Releases](https://github.com/ethan321222/asar/releases) 下载最新的 `.tgz` 文件，然后安装：
 
 ```bash
-npm install -g ./electron-asar-0.0.0-development.tgz
+npm install -g ./package.tgz
 ```
 
 > 每次 push 到 `main` 都会自动构建并发布新版本，下载即用。
