@@ -95,7 +95,7 @@ node bin/asar.mjs extract ./app.asar ./output
 从 [GitHub Actions](https://github.com/ethan321222/asar/actions) 下载最新的 `asar-package` artifact，解压后安装：
 
 ```bash
-npm install -g ./electron-asar-0.0.0-development.tgz
+npm install -g ./*.tgz
 ```
 
 > 每次 push 到 `main` 都会自动构建并上传产物，下载即可使用。
