@@ -90,15 +90,15 @@ npm link
 node bin/asar.mjs extract ./app.asar ./output
 ```
 
-**方式 4：从 CI 产物安装（无需 clone 和 build）**
+**方式 4：从 GitHub Release 安装（无需 clone 和 build）**
 
-从 [GitHub Actions](https://github.com/ethan321222/asar/actions) 下载最新的 `asar-package` artifact，解压后安装：
+从 [GitHub Releases](https://github.com/ethan321222/asar/releases) 下载最新的 `.tgz` 文件，然后安装：
 
 ```bash
-npm install -g ./*.tgz
+npm install -g ./electron-asar-0.0.0-development.tgz
 ```
 
-> 每次 push 到 `main` 都会自动构建并上传产物，下载即可使用。
+> 每次 push 到 `main` 都会自动构建并发布新版本，下载即用。
 
 **安装方式对比：**
 
