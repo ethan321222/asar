@@ -65,9 +65,6 @@ Electron 应用可以将部分文件标记为 `unpacked`，这些文件不打包
 git clone https://github.com/ethan321222/asar.git
 cd asar
 
-# 切换到修复分支
-git checkout asarx
-
 # 安装依赖并编译
 yarn install
 yarn build
@@ -93,13 +90,24 @@ npm link
 node bin/asar.mjs extract ./app.asar ./output
 ```
 
+**方式 4：从 CI 产物安装（无需 clone 和 build）**
+
+从 [GitHub Actions](https://github.com/ethan321222/asar/actions) 下载最新的 `asar-package` artifact，解压后安装：
+
+```bash
+npm install -g ./electron-asar-0.0.0-development.tgz
+```
+
+> 每次 push 到 `main` 都会自动构建并上传产物，下载即可使用。
+
 **安装方式对比：**
 
-| 方式 | 本质 | 改代码后 | 删除项目后 | 适用场景 |
-|------|------|----------|------------|----------|
-| `npm link` | 符号链接 | 立即生效 | 命令失效 | 开发调试 |
-| `npm install -g .` | 复制文件 | 需重新安装 | 命令仍可用 | 正式使用 |
-| `node bin/asar.mjs` | 直接运行 | 立即生效 | 命令失效 | 临时测试 |
+| 方式 | 本质 | 需要 clone | 需要 build | 适用场景 |
+|------|------|------------|------------|----------|
+| `npm install -g .` | 复制文件 | ✅ | ✅ | 正式使用 |
+| `npm link` | 符号链接 | ✅ | ✅ | 开发调试 |
+| `node bin/asar.mjs` | 直接运行 | ✅ | ✅ | 临时测试 |
+| CI 产物 `.tgz` | 预编译包 | ❌ | ❌ | 快速使用 |
 
 ### 使用命令
 
