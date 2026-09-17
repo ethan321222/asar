@@ -70,7 +70,7 @@ yarn install
 yarn build
 ```
 
-**方式 1：全局安装（推荐）**
+**方式 1：全局安装**
 
 ```bash
 npm install -g .
@@ -90,7 +90,7 @@ npm link
 node bin/asar.mjs extract ./app.asar ./output
 ```
 
-**方式 4：从 GitHub Release 安装（无需 clone 和 build）**
+**方式 4：从 GitHub Release 安装（推荐，无需 clone 和 build）**
 
 从 [GitHub Releases](https://github.com/ethan321222/asar/releases) 下载最新的 `.tgz` 文件，然后安装：
 
@@ -137,9 +137,24 @@ asarx extract-file <archive> <filename>
 
 ### 卸载
 
+根据安装方式选择对应的卸载命令：
+
+| 安装方式 | 卸载命令 |
+|---------|---------|
+| `npm install -g .` | `npm uninstall -g @electron/asar` |
+| `npm link` | `npm unlink -g @electron/asar` |
+| `node bin/asar.mjs` | 无需卸载（直接运行） |
+| CI 产物 `.tgz` | `npm uninstall -g @electron/asar` |
+
 ```bash
-npm uninstall -g .
+# 卸载全局安装的包（方式 1 和 4）
+npm uninstall -g @electron/asar
+
+# 取消本地符号链接（方式 2）
+npm unlink -g @electron/asar
 ```
+
+> 注意：`-g` 后面需要跟**包名**（`@electron/asar`），而不是路径（`.`）。可通过 `npm list -g --depth=0` 确认是否已卸载。
 
 ## 与官方工具的区别
 
